@@ -1,13 +1,15 @@
+setOldClass("tbl_duckdb_connection")
+
+#' @importFrom d function
 #' @export
 setClass(
   "DuckArraySeed",
   contains="Array",
   slots=c(
-    filepath="character",
+    table="tbl_duckdb_connection",
     index_cols="character",
     value_col="character",
-    connection="duckdb_connection",
-    duckdb_config="list"
+    dim="integer"
   )
 )
 
@@ -16,8 +18,8 @@ setClass(
 setValidity("DuckArraySeed", function(object){
     checks <- c(
         if(length(object@index_cols) == 0) "At least one index column must be specified!" else NA_character_,
-        if(length(object@value_col) != 1) "Exactly one value column must be specified!" else NA_character_,
-        if(attr(object@connection, "pid") != Sys.getpid()) "The"
+        if(length(object@value_col) != 1) "Exactly one value column must be specified!" else NA_character_
+        # if(attr(object@connection, "pid") != Sys.getpid()) "The"
     ) |> na.omit()
 
     if (length(checks) == 0)
@@ -28,44 +30,100 @@ setValidity("DuckArraySeed", function(object){
 
 #' Create a new array seed backed by a file DuckDB can read
 #' @export
-DuckArraySeed <- function(filepath, index_cols=c("i", "j"), value_col="x", duckdb_config=list()){
-    # Warning-level validations
-    # Error-level validations are located in the formal validator
-    if (!file.exists(filepath)){
-        paste0('filepath argument: "', filepath, '" does not exist!') |> warning()
-    }
-    if (!tools::file_ext(filepath) %in% c("parquet", "json", "csv")){
-        paste0(
-            'filepath argument: "',
-            filepath,
-            '" has neither a parquet, json nor CSV file extension.'
-        ) |> warning()
-    }
+DuckArraySeed <- function(
+    tbl,
+    index_cols=c("i", "j"),
+    value_col="x"
+) {
     new(
         "DuckArraySeed",
-        filepath = filepath,
+        table=tbl,
         index_cols = index_cols,
         value_col = value_col,
-        connection = connect(duckdb_config),
-        duckdb_config = duckdb_config
+        dim = calculate_dims(index_cols, tbl)
     )
 }
 
-setMethod("dim", signature = c(x = "DuckArraySeed"), function(x){
-    res = x@index_cols |>
-        DBI::dbQuoteIdentifier(x@connection, x=_) |>
-        purrr::map(function(id){
-            DBI::sqlInterpolate(x@connection, "MAX(?)", id)
+#' Creates a copy of the provided seed, but with the data copied to DuckDB
+#' instead of living in its original form.
+#'
+#' This may significantly increase performance
+copy_local <- function(seed, table_name = stringi::stri_rand_strings(n=1, length=20, pattern="[A-Za-z]")){
+    new_tbl <- dplyr::copy_to(
+        dest = dbplyr::remote_con(seed@table),
+        df = seed@table,
+        name = table_name
+    )
+}
+
+make_index_query <- function(index_cols, connection, filepath){
+    where_clause <- index_cols |>
+        lapply(function(index){
+            index |>
+                vapply(function(index_entry){
+                    DBI::sqlInterpolate(
+                        connection,
+                        "? IN (?)",
+                        DBI::dbQuoteLiteral(
+                            connection,
+                            index_entry,
+                        )
+                    )
+                }, character(1)) |>
+                paste0(collapse = ", ")
         }) |>
-        paste(collapse=", ") |>
-        DBI::SQL() |>
-        DBI::sqlInterpolate(
-            x@connection,
-            "SELECT ?cols FROM ?table",
-            cols=_,
-            table=x@filepath
-        ) |>
-        DBI::dbGetQuery(x@connection, statement=_)
+        paste0(collapse=" AND ") |>
+        DBI::SQL()
+
+    where_clause
+}
+
+#' Returns a named integer vector that describes the length of each dimension
+calculate_dims <- function(index_cols, tbl){
+    dplyr::summarise(
+        tbl,
+        dplyr::across(dplyr::all_of(index_cols), ~max(., na.rm=TRUE)),
+    ) |>
+        dplyr::collect() |>
+        unlist()
+}
+
+setMethod("dimnames", signature = c(x = "DuckArraySeed"), function(x){
+    NULL
+})
+
+#' @importFrom DelayedArray extract_array
+setMethod("extract_array", signature = c(x = "DuckArraySeed"), function(x, index){
+    filters <- index |>
+        purrr::set_names(x@index_cols) |>
+        purrr::discard(is.null) |>
+        purrr::imap(function(slice, name){
+            colname <- rlang::sym(name)
+            rlang::quo({{colname}} %in% slice)
+        }) |>
+        purrr::set_names(NULL)
+
+    df <- x@table |>
+        dplyr::filter(!!!filters) |>
+        dplyr::collect()
+
+    dim_cols <- df |>
+        dplyr::select(!!x@index_cols) |>
+        dplyr::mutate(dplyr::across(dplyr::everything(), dplyr::dense_rank)) |>
+        as.matrix()
+    value_col <- df |> dplyr::pull(!!x@value_col)
+
+    output <- seq_along(index) |>
+        purrr::map_int(function(i){
+            if (is.null(index[[i]]))
+                x@dim[[i]]
+            else
+                length(index[[i]])
+        }) |>
+        array(0, dim=_)
+    browser()
+    output[dim_cols] <- value_col
+    output
 })
 
 #' Starts a new duckdb connection for use in a `DuckArraySeed`
