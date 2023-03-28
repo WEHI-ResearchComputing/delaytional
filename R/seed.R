@@ -94,34 +94,46 @@ setMethod("dimnames", signature = c(x = "DuckArraySeed"), function(x){
 
 #' @importFrom DelayedArray extract_array
 setMethod("extract_array", signature = c(x = "DuckArraySeed"), function(x, index){
-    filters <- index |>
-        purrr::set_names(x@index_cols) |>
-        purrr::discard(is.null) |>
-        purrr::imap(function(slice, name){
-            colname <- rlang::sym(name)
-            rlang::quo({{colname}} %in% slice)
-        }) |>
-        purrr::set_names(NULL)
+    table_name <- stringi::stri_rand_strings(n=1, pattern="[A-Za-z]", length=20)
+    conn <- dbplyr::remote_con(x@table)
+    result_dims <- dplyr::if_else(
+        purrr::map_lgl(index, is.null),
+        x@dim,
+        lengths(index)
+    ) |>
+        purrr::set_names(names(x@dim))
 
-    df <- x@table |>
-        dplyr::filter(!!!filters) |>
+    # Build a big SQL query that gives us the array values in the range the user
+    # has requested, plus the indices at which those values should live in the
+    # output array (which aren't the same as the user-provided indices)
+    entries <- result_dims |>
+        purrr::map(seq_len) |>
+        expand.grid() |>
+        dplyr::copy_to(conn, df=_, name=table_name, temporary=TRUE) |>
+        dplyr::mutate(
+            dplyr::across(dplyr::everything(), dense_rank, .names="rank_{.col}")
+        ) |>
+        dplyr::inner_join(x@table, by = names(x@dim)) |>
+        dplyr::select(
+            dplyr::starts_with("rank"),
+            dplyr::any_of(x@value_col)
+        ) |>
+        dplyr::rename_with(
+            .cols=dplyr::starts_with("rank"),
+            .fn=~stringr::str_remove(., "rank_")
+        ) |>
         dplyr::collect()
 
-    dim_cols <- df |>
-        dplyr::select(!!x@index_cols) |>
-        dplyr::mutate(dplyr::across(dplyr::everything(), dplyr::dense_rank)) |>
-        as.matrix()
-    value_col <- df |> dplyr::pull(!!x@value_col)
+    value_col_name <- rlang::sym(x@value_col)
 
-    output <- seq_along(index) |>
-        purrr::map_int(function(i){
-            if (is.null(index[[i]]))
-                x@dim[[i]]
-            else
-                length(index[[i]])
-        }) |>
-        array(0, dim=_)
-    browser()
+    dim_cols <- entries |>
+        dplyr::select(!{{value_col_name}}) |>
+        as.matrix()
+
+    value_col <- entries |>
+        dplyr::pull({{value_col_name}})
+
+    output <- array(0, dim=unname(result_dims))
     output[dim_cols] <- value_col
     output
 })
