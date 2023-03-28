@@ -19,3 +19,6 @@ Imports:
     dplyr,
     duckdb
 biocViews: Software
+Collate: 
+    'seed.R'
+    'duck_array.R'

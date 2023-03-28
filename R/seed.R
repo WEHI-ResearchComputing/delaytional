@@ -13,8 +13,15 @@ setClass(
   )
 )
 
+#' @importFrom DelayedArray DelayedArray
+setMethod(
+    "DelayedArray",
+    "DuckArraySeed",
+    function(seed) new_DelayedArray(seed, Class="DuckArray")
+)
+
 #' Validate a `DuckArraySeed`
-#' @export
+#' @noRd
 setValidity("DuckArraySeed", function(object){
     checks <- c(
         if(length(object@index_cols) == 0) "At least one index column must be specified!" else NA_character_,
@@ -53,28 +60,6 @@ copy_local <- function(seed, table_name = stringi::stri_rand_strings(n=1, length
         df = seed@table,
         name = table_name
     )
-}
-
-make_index_query <- function(index_cols, connection, filepath){
-    where_clause <- index_cols |>
-        lapply(function(index){
-            index |>
-                vapply(function(index_entry){
-                    DBI::sqlInterpolate(
-                        connection,
-                        "? IN (?)",
-                        DBI::dbQuoteLiteral(
-                            connection,
-                            index_entry,
-                        )
-                    )
-                }, character(1)) |>
-                paste0(collapse = ", ")
-        }) |>
-        paste0(collapse=" AND ") |>
-        DBI::SQL()
-
-    where_clause
 }
 
 #' Returns a named integer vector that describes the length of each dimension
