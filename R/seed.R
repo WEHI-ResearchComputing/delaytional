@@ -19,7 +19,6 @@ setValidity("DuckArraySeed", function(object){
     checks <- c(
         if(length(object@index_cols) == 0) "At least one index column must be specified!" else NA_character_,
         if(length(object@value_col) != 1) "Exactly one value column must be specified!" else NA_character_
-        # if(attr(object@connection, "pid") != Sys.getpid()) "The"
     ) |> na.omit()
 
     if (length(checks) == 0)
@@ -79,6 +78,7 @@ make_index_query <- function(index_cols, connection, filepath){
 }
 
 #' Returns a named integer vector that describes the length of each dimension
+#' @noRd
 calculate_dims <- function(index_cols, tbl){
     dplyr::summarise(
         tbl,
@@ -137,21 +137,3 @@ setMethod("extract_array", signature = c(x = "DuckArraySeed"), function(x, index
     output[dim_cols] <- value_col
     output
 })
-
-#' Starts a new duckdb connection for use in a `DuckArraySeed`
-#' @keywords internal
-connect <- function(duckdb_config){
-    # We give the connection a PID attribute so that we can identify if the
-    # process forks and renders the connection unusable
-    do.call(duckdb::duckdb, duckdb_config) |>
-        DBI::dbConnect() |>
-        structure(pid=Sys.getpid())
-}
-
-#' Checks if a given `DuckArraySeed` needs to open a new connection, e.g.
-#' because the process has forked since it was created
-check_reconnect <- function(seed){
-    if(attr(seed@connection, "pid") != Sys.getpid()){
-        seed@connection <- connect(seed@duckdb_config)
-    }
-}
