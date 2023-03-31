@@ -11,47 +11,97 @@ knitr::opts_chunk$set(
   fig.path = "man/figures/README-",
   out.width = "100%"
 )
+
+# Hack to remove double slashes from temporary files when running under MacOS
+# This breaks duckdb
+Sys.getenv("TMPDIR") |>
+    stringr::str_remove("/$") |>
+    Sys.setenv(TMPDIR=_)
 ```
 
-# milton.m
+# delaytional
 
 <!-- badges: start -->
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![CRAN status](https://www.r-pkg.org/badges/version/milton.m)](https://CRAN.R-project.org/package=milton.m)
 <!-- badges: end -->
 
-The goal of milton.m is to ...
+`delaytional` provides a backend for [`DelayedArray`](https://bioconductor.org/packages/release/bioc/html/DelayedArray.html)
+that stores the array data in an SQL database. The main motivation for doing 
+this is so that you can use the impressive performance of [DuckDB](https://duckdb.org/)
+to store array data in Parquet files and query them out of memory (without
+loading the entire dataset into R). Other possible use cases include:
+
+* Out-of-memory querying of CSV or NDJSON data, via DuckDB
+* Using SQLite databases as array stores
+* Re-using an existing database server (DBMS) to support matrix data
 
 ## Installation
 
 You can install the development version of milton.m from [GitHub](https://github.com/) with:
 
-``` r
-# install.packages("devtools")
-devtools::install_github("multimeric/DelayedDuck")
+```r
+# install.packages("remotes")
+remotes::install_github("multimeric/DelayedDuck")
 ```
 
 ## Example
 
-This is a basic example which shows you how to solve a common problem:
-
-```{r example}
-library(milton.m)
-## basic example code
+Let's say we're working with a fairly large matrix:
+```{r}
+in_mem <- rnorm(n = 4E8) |> matrix(ncol = 2E4)
+lobstr::obj_size(in_mem)
 ```
 
-What is special about using `README.Rmd` instead of just `README.md`? You can include R chunks like so:
+This isn't too bad, but you can easily imagine we might be in trouble if the matrix were 100 times larger.
 
-```{r cars}
-summary(cars)
+Let's convert it into a `delaytional` array and see if we can improve that.
+First we need to write the array to parquet using `array_to_table`:
+
+```{r}
+table_dest <- tempfile(fileext=".parquet")
+in_mem |>
+    delaytional::array_to_table() |>
+    arrow::write_parquet(table_dest)
 ```
 
-You'll still need to render `README.Rmd` regularly, to keep `README.md` up-to-date. `devtools::build_readme()` is handy for this. You could also use GitHub Actions to re-render `README.Rmd` every time you push. An example workflow can be found here: <https://github.com/r-lib/actions/tree/v1/examples>.
+Next, we can create an array from the parquet file. 
+This is also how you would create a `DelayedArray` from an existing parquet
+dataset that you didn't make yourself:
 
-You can also embed plots, for example:
-
-```{r pressure, echo = FALSE}
-plot(pressure)
+```{r}
+delayed_parquet <- duckdb::duckdb() |>
+  DBI::dbConnect() |>
+  dplyr::tbl(table_dest) |>
+  delaytional::SqlArraySeed() |>
+  DelayedArray::DelayedArray()
 ```
 
-In that case, don't forget to commit and push the resulting figure files, so they display on GitHub and CRAN.
+How big is it now?
+
+```{r}
+lobstr::obj_size(delayed_parquet)
+```
+
+```{r}
+x = sample.int(n = 2E4, size = 5)
+y = sample.int(n = 2E4, size = 5)
+```
+
+```{r}
+in_mem[x, y]
+```
+```{r}
+delayed_parquet[x, y]
+```
+```{r}
+identical(
+    in_mem[x, y],
+    delayed_parquet[x, y]
+)
+```
+
+
+
+
+

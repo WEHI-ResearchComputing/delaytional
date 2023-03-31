@@ -1,5 +1,5 @@
-Package: DelayedDuck
-Title: What the Package Does (One Line, Title Case)
+Package: delaytional
+Title: A DelayedArray implementation for relational (SQL) databases
 Version: 0.0.0.9000
 Authors@R: 
     person("First", "Last", , "first.last@example.com", role = c("aut", "cre"),
@@ -7,6 +7,9 @@ Authors@R:
 Description: What the package does (one paragraph).
 License: MIT + file LICENSE
 Suggests: 
+    bench,
+    knitr,
+    rmarkdown,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 Encoding: UTF-8
@@ -21,4 +24,6 @@ Imports:
 biocViews: Software
 Collate: 
     'seed.R'
-    'duck_array.R'
+    'array.R'
+    'save.R'
+VignetteBuilder: knitr

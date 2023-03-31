@@ -3,5 +3,12 @@ test_that("array data survives a round trip unchanged", {
     conn <- duckdb::duckdb() |> DBI::dbConnect()
     delayed <- store_sql_array(x, dest = conn, name = "foo")
     final <- as(delayed, "array")
+
     expect_identical(x, final)
+
+    # Edge case with reverse order indices
+    expect_identical(
+        x[3:1, 3:1],
+        final[3:1, 3:1]
+    )
 })
