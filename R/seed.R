@@ -1,14 +1,9 @@
-# We need an S4 class hierarchy for all these classes
-# This forces dbplyr to be attached, so we can use its own S4 class definitions
-#' @importFrom dbplyr sql
-setOldClass(c("tbl_dbi", "tbl_sql", "tbl_lazy", "tbl"))
-
 #' @export
 setClass(
   "SqlArraySeed",
   contains="Array",
   slots=c(
-    table="tbl_sql",
+    table="tbl_lazy",
     index_cols="character",
     value_col="character",
     dim="integer"

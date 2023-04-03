@@ -8,7 +8,7 @@ test_that("array data survives a round trip unchanged", {
 
     # Edge case with reverse order indices
     expect_identical(
-        x[3:1, 3:1],
-        final[3:1, 3:1]
+        x[2:1, 2:1, 2:1],
+        final[2:1, 2:1, 2:1]
     )
 })

@@ -83,9 +83,12 @@ How big is it now?
 lobstr::obj_size(delayed_parquet)
 ```
 
+Now let's pull out some random indices from the two arrays, and compare the results:
+
 ```{r}
-x = sample.int(n = 2E4, size = 5)
-y = sample.int(n = 2E4, size = 5)
+set.seed(1)
+x = sample.int(n = nrow(in_mem), size = 5)
+y = sample.int(n = ncol(in_mem), size = 5)
 ```
 
 ```{r}
@@ -95,13 +98,11 @@ in_mem[x, y]
 delayed_parquet[x, y]
 ```
 ```{r}
-identical(
+all.equal(
     in_mem[x, y],
-    delayed_parquet[x, y]
+    as.array(delayed_parquet[x, y]),
 )
 ```
 
-
-
-
-
+The same results! The only difference is that `delayed_parquet` has a much smaller
+memory footprint.
