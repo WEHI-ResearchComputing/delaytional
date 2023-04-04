@@ -23,7 +23,7 @@ Sys.getenv("TMPDIR") |>
 
 <!-- badges: start -->
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
-[![CRAN status](https://www.r-pkg.org/badges/version/milton.m)](https://CRAN.R-project.org/package=milton.m)
+[![CRAN status](https://www.r-pkg.org/badges/version/delaytional)](https://CRAN.R-project.org/package=delaytional)
 <!-- badges: end -->
 
 `delaytional` provides a backend for [`DelayedArray`](https://bioconductor.org/packages/release/bioc/html/DelayedArray.html)
@@ -38,7 +38,7 @@ loading the entire dataset into R). Other possible use cases include:
 
 ## Installation
 
-You can install the development version of milton.m from [GitHub](https://github.com/) with:
+You can install the development version of `delaytional` from [GitHub](https://github.com/) with:
 
 ```r
 # install.packages("remotes")
