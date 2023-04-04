@@ -42,7 +42,7 @@ You can install the development version of `delaytional` from [GitHub](https://g
 
 ```r
 # install.packages("remotes")
-remotes::install_github("multimeric/DelayedDuck")
+remotes::install_github("WEHI-ResearchComputing/delaytional")
 ```
 
 ## Example
